@@ -10,7 +10,7 @@ import shutil
 from pathlib import Path
 
 from src.config import arg_parse, run_directory
-from src.data_setup import load_data, create_dataloaders
+from src.data_setup import load_data, dataset_setup, iterate_batches
 
 class NeuralNetwork(nn.Module):
 	def __init__(self, in_dimension, out_dimension, hidden_layers, neurons_per_hidden_layer):
@@ -39,26 +39,21 @@ class NeuralNetwork(nn.Module):
 	def forward(self, x):
 		return self.network(x)
 
-def evaluate_network(net, config, stats, dataloader):
+def evaluate_network(net, x, y, stats):
 	_, _, y_mean, y_std = stats
-	y_mean, y_std = y_mean.to(config["device"]), y_std.to(config["device"])
-	total_squared_err = 0
+	y_mean, y_std = y_mean.to(x.device), y_std.to(x.device)
+	
 	net.eval()
 	with torch.no_grad():
-		for xb, yb in dataloader:
-			xb = xb.to(config["device"])
-			yb = yb.to(config["device"])
+		
+		# denorm prediction
+		output = net(x)
+		pred = output * y_std + y_mean
+		true = y * y_std + y_mean
 
-			output = net(xb)
-			# denorm prediction
-			pred = output * y_std + y_mean
-			true = yb * y_std + y_mean
+		mse = ((pred - true) ** 2).mean().item()
 
-			total_squared_err += ((pred - true) * ( pred - true)).sum().item()
-
-	mse = total_squared_err / len(dataloader.dataset)
-	rmse = np.sqrt(mse)
-	return mse, rmse
+	return mse, np.sqrt(mse)
 
 def save_run(run_dir, config, stats, train_losses, eval_rmses, best_epoch, best_eval_rmse, best_state, training_time, diverged_epoch):
 	run_dir.mkdir(parents=True, exist_ok=True)
@@ -101,19 +96,24 @@ if __name__=="__main__":
 		config["train_size"] = 1000
 		config["epochs"] = 2
 		config["batch_size"] = 100
-		run_dir = Path(tempfile.mkdtemp(prefix="quick_test_"))
+		run_dir = None
 	else:
 		run_dir = run_directory(config)
 		# directory check
 		if run_dir.exists() and not config["overwrite"]:
 				raise SystemExit(f"{run_dir} already exists; pass --overwrite to replace it")
 
+	# set seeds
+	torch.manual_seed(config["seed"])
+
 	# load data
 	data_splits = load_data(config["dataset_path"])
-	train_loader, eval_loader, test_loader, stats = create_dataloaders(splits=data_splits, batch_size=config["batch_size"], train_size=config["train_size"])
+	data, stats = dataset_setup(splits=data_splits, device=config["device"], train_size=config["train_size"])
+
+	x_train, y_train = data["training"]
+	x_eval, y_eval = data["evaluation"]
 
 	# network setup
-	torch.manual_seed(config["seed"])
 	net = NeuralNetwork(in_dimension=14, out_dimension=1, hidden_layers=config["hidden_layers"], neurons_per_hidden_layer=config["neurons_per_hidden_layer"])
 	optimizer = torch.optim.Adam(net.parameters(), lr=config["learning_rate"])
 	net.to(config["device"])
@@ -132,7 +132,7 @@ if __name__=="__main__":
 
 	for epoch in range(1, config["epochs"] + 1):
 		net.train()
-		total_loss = 0
+		total_loss = torch.zeros((), device=config["device"])
 
 		if torch.device(config["device"]).type == "cuda":
 			torch.cuda.synchronize()
@@ -140,9 +140,7 @@ if __name__=="__main__":
 		start_time = time.perf_counter()
 		
 		# training loop
-		for xb, yb in train_loader:
-			xb = xb.to(config["device"])
-			yb = yb.to(config["device"])
+		for xb, yb in iterate_batches(x_train, y_train, config["batch_size"], shuffle=True):
 
 			optimizer.zero_grad()
 			output = net(xb)
@@ -150,7 +148,7 @@ if __name__=="__main__":
 			loss.backward()
 			optimizer.step()
 
-			total_loss += loss.item() * xb.size(0)
+			total_loss += loss.detach() * len(xb)
 
 		if torch.device(config["device"]).type == "cuda":
 			torch.cuda.synchronize()
@@ -158,8 +156,8 @@ if __name__=="__main__":
 		end_time = time.perf_counter()
 		training_time += (end_time - start_time)
 
-		train_loss = total_loss / len(train_loader.dataset)
-		eval_mse, eval_rmse = evaluate_network(net, config, stats, eval_loader)
+		train_loss = total_loss.item() / len(x_train)
+		eval_mse, eval_rmse = evaluate_network(net, x_eval, y_eval, stats)
 
 		train_losses.append(train_loss)
 		eval_rmses.append(eval_rmse)
@@ -183,11 +181,15 @@ if __name__=="__main__":
 	if best_state is not None:
 		net.load_state_dict(best_state)
 	
-	# save data, configuration, and other data for plotting
-	save_run(run_dir, config, stats, train_losses, eval_rmses, best_epoch, best_eval_rmse, best_state, training_time, diverged_epoch)
-	
+	# save data, configuration, and other data for plotting	
 	if config["quick_test"]:
-		shutil.rmtree(run_dir)
+
+		run_dir = Path(tempfile.mkdtemp(prefix="quick_test_"))
+
+		try:
+			save_run(run_dir, config, stats, train_losses, eval_rmses, best_epoch, best_eval_rmse, best_state, training_time, diverged_epoch)
+		finally:
+			shutil.rmtree(run_dir, ignore_errors=True)
 
 		if diverged_epoch is not None:
 				raise SystemExit("quick test failed: training diverged")
@@ -195,6 +197,7 @@ if __name__=="__main__":
 		print(f"quick test passed: eval RMSE {best_eval_rmse:.3f} L after {config['epochs']} epochs")
 
 	else:
+		save_run(run_dir, config, stats, train_losses, eval_rmses, best_epoch, best_eval_rmse, best_state, training_time, diverged_epoch)
 		print(f"saved to {run_dir}: best eval RMSE {best_eval_rmse:.3f} L at epoch {best_epoch}")
 	
 

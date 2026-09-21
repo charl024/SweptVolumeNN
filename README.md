@@ -7,3 +7,6 @@ To verify training works, run:
 
 ## Python Version Information
 Python 3.14.3, PyTorch 2.10.0, atplotlib 3.10.8
+
+### Credits
+Charles Omaoeng - 2026

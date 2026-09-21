@@ -1,0 +1,6 @@
+# Python 3.14.3 (tested). Install with: pip install -r requirements.txt
+# On Linux, the PyPI torch wheel includes CUDA 12.8 support. For a different CUDA
+# version, install torch first from https://pytorch.org/get-started/locally/
+numpy==2.4.2
+torch==2.10.0
+matplotlib==3.10.8

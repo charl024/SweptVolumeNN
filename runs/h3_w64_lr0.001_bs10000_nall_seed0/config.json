@@ -1,0 +1,15 @@
+{
+    "dataset_path": "/nfs/student/student/c/comaoeng/CS591-DeepRL/SweptVolumeNN/swept_volume_data.npz",
+    "hidden_layers": 3,
+    "neurons_per_hidden_layer": 64,
+    "learning_rate": 0.001,
+    "batch_size": 10000,
+    "train_size": null,
+    "epochs": 1000,
+    "seed": 0,
+    "device": "cuda",
+    "overwrite": false,
+    "quick_test": false,
+    "device_name": "NVIDIA GeForce RTX 5070 Ti",
+    "torch_version": "2.10.0+cu128"
+}

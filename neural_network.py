@@ -13,17 +13,26 @@ from src.config import arg_parse, run_directory
 from src.data_setup import load_data, dataset_setup, iterate_batches
 
 class NeuralNetwork(nn.Module):
-	def __init__(self, in_dimension, out_dimension, hidden_layers, neurons_per_hidden_layer):
+	def __init__(self, in_dimension, out_dimension, hidden_layers, neurons_per_hidden_layer, dropout=0.0):
 		super(NeuralNetwork, self).__init__()
 		layers = []
 
 		# setup input layer
 		layers.append(nn.Linear(in_dimension, neurons_per_hidden_layer))
 		layers.append(nn.ReLU())
+
+		# add dropout if value above 0
+		if dropout > 0:
+			layers.append(nn.Dropout(dropout))
+
 		# setup hidden layers
 		for _ in range(hidden_layers - 1):
 			layers.append(nn.Linear(neurons_per_hidden_layer, neurons_per_hidden_layer))
 			layers.append(nn.ReLU())
+
+			# add dropout if value above 0
+			if dropout > 0:
+				layers.append(nn.Dropout(dropout))
 
 		# setup output layer
 		layers.append(nn.Linear(neurons_per_hidden_layer, out_dimension))
@@ -114,7 +123,7 @@ if __name__=="__main__":
 	x_eval, y_eval = data["evaluation"]
 
 	# network setup
-	net = NeuralNetwork(in_dimension=14, out_dimension=1, hidden_layers=config["hidden_layers"], neurons_per_hidden_layer=config["neurons_per_hidden_layer"])
+	net = NeuralNetwork(in_dimension=14, out_dimension=1, hidden_layers=config["hidden_layers"], neurons_per_hidden_layer=config["neurons_per_hidden_layer"], dropout=config["dropout"])
 	optimizer = torch.optim.Adam(net.parameters(), lr=config["learning_rate"])
 	net.to(config["device"])
 

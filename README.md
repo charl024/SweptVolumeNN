@@ -16,6 +16,11 @@ To verify training works, run:
 
 ``python3 neural_network.py --quick-test``
 
+## Experiments
+ - Standard
+ - Dropout versus best hyperparam config comparison
+ - Dropout across multiple hidden layer values
+
 ## Python Version Information
 Python 3.14.3, PyTorch 2.10.0, Matplotlib 3.10.8
 

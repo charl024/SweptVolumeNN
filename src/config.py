@@ -15,7 +15,8 @@ def create_config(
     device,
     overwrite,
     quick_test,
-    dropout):
+    dropout,
+    batch_norm):
     return {"dataset_path" : dataset_path,
             "experiment" : experiment,
             "hidden_layers" : hidden_layers,
@@ -28,7 +29,8 @@ def create_config(
             "device" : device,
             "overwrite" : overwrite,
             "quick_test": quick_test,
-            "dropout" : dropout}
+            "dropout" : dropout,
+            "batch_norm" : batch_norm}
 
 def arg_parse():
     parser = argparse.ArgumentParser()
@@ -45,12 +47,14 @@ def arg_parse():
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--quick-test", action="store_true")
     parser.add_argument("--dropout", type=float, default=0.0)
+    parser.add_argument("--batch_norm", action="store_true")
     args = parser.parse_args()
 
     return create_config(**vars(args))
 
 def run_directory(config):
-    name = (f"{config['experiment']}_d{config['dropout']}_h{config['hidden_layers']}_w{config['neurons_per_hidden_layer']}"
+    batch_norm = "_bn" if config["batch_norm"] else ""
+    name = (f"{config['experiment']}_d{config['dropout']}{batch_norm}_h{config['hidden_layers']}_w{config['neurons_per_hidden_layer']}"
             f"_lr{config['learning_rate']}_bs{config['batch_size']}"
             f"_n{config['train_size'] or 'all'}_e{config['epochs']}_seed{config['seed']}")
     return Path("runs") / name

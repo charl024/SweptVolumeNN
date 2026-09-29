@@ -18,7 +18,10 @@ def load_model(run_dir):
     checkpoint = torch.load(run_dir / "checkpoint.pt", weights_only=True)
     if checkpoint["state_dict"] is None:
         raise SystemExit(f"{run_dir} has no checkpoint (run diverged before any valid epoch)")
-    net = NeuralNetwork(14, 1, checkpoint["hidden_layers"], checkpoint["neurons_per_hidden_layer"])
+    config = json.loads((run_dir / "config.json").read_text())
+    net = NeuralNetwork(14, 1, checkpoint["hidden_layers"], checkpoint["neurons_per_hidden_layer"],
+                        dropout=checkpoint.get("dropout", config.get("dropout", 0.0)),
+                        batchnorm_toggle=checkpoint.get("batch_norm", config.get("batch_norm", False)))
     net.load_state_dict(checkpoint["state_dict"])
     s = checkpoint["stats"]
     return net, (s["x_mean"], s["x_std"], s["y_mean"], s["y_std"])

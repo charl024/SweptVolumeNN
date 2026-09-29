@@ -12,14 +12,16 @@ DROPOUT = 0.1
 def condition(hidden_layers, neurons):
     return f"h{hidden_layers}_w{neurons}_lr0.001_bs10000_nall"
 
-def dropout_condition(experiment, dropout, hidden_layers, neurons, epochs):
-    return f"{experiment}_d{dropout}_h{hidden_layers}_w{neurons}_lr0.001_bs10000_nall_e{epochs}"
+def variant_condition(experiment, dropout, hidden_layers, neurons, epochs, batch_norm=False):
+    bn = "_bn" if batch_norm else ""
+    return f"{experiment}_d{dropout}{bn}_h{hidden_layers}_w{neurons}_lr0.001_bs10000_nall_e{epochs}"
 
 def run_dirs(condition_name):
     return sorted((ROOT / "runs").glob(f"{condition_name}_seed*"))
 
-def parameters(hidden_layers, neurons):
-    return 14 * neurons + neurons + (hidden_layers - 1) * (neurons * neurons + neurons) + neurons + 1
+def parameters(hidden_layers, neurons, batch_norm=False):
+    total = 14 * neurons + neurons + (hidden_layers - 1) * (neurons * neurons + neurons) + neurons + 1
+    return total + 2 * neurons * hidden_layers if batch_norm else total
 
 def mean_std(condition_name):
     curves = [np.load(d / "history.npz")["eval_rmse"] for d in run_dirs(condition_name)]
@@ -66,15 +68,15 @@ def curve_plot(conditions, labels, title, filename, colors=None, styles=None):
 
     finish(title, filename)
 
-def capacity_plot(title, filename):
+def capacity_plot(title, filename, variant_label, variant_name, variant_params=parameters):
     plt.figure(figsize=(7, 4.5))
-    for label, name_of, style in [(f"no dropout", lambda h, w: condition(h, w), "-o"),
-                                  (f"dropout {DROPOUT}", lambda h, w: dropout_condition("dropout_capacity", DROPOUT, h, w, 1000), "--s")]:
+    for label, name_of, params_of, style in [("baseline", condition, parameters, "-o"),
+                                             (variant_label, variant_name, variant_params, "--s")]:
         points = []
         for hidden_layers, neurons in CAPACITIES:
             mean, std = best_mean_std(name_of(hidden_layers, neurons))
             if mean is not None:
-                points.append((parameters(hidden_layers, neurons), mean, std))
+                points.append((params_of(hidden_layers, neurons), mean, std))
         if not points:
             print(f"skipping {filename}: no runs found for '{label}'")
             plt.close()
@@ -96,18 +98,38 @@ if __name__ == "__main__":
                "Network width (3 hidden layers, mean +- std over 5 seeds)",
                "width.svg")
 
-    curve_plot([condition(3, 256), dropout_condition("dropout_standard", DROPOUT, 3, 256, 1000)],
+    curve_plot([condition(3, 256), variant_condition("dropout_standard", DROPOUT, 3, 256, 1000)],
                ["no dropout", f"dropout {DROPOUT}"],
                "Dropout on the best configuration (3x256, mean +- std over 5 seeds)",
                "dropout.svg")
 
     depths = [1, 2, 3]
     curve_plot([condition(h, 256) for h in depths]
-               + [dropout_condition("dropout_capacity", DROPOUT, h, 256, 1000) for h in depths],
+               + [variant_condition("dropout_capacity", DROPOUT, h, 256, 1000) for h in depths],
                [f"{h}x256" for h in depths] + [f"{h}x256, dropout {DROPOUT}" for h in depths],
                "Dropout by depth (256 neurons per layer, mean +- std over 5 seeds)",
                "dropout_depth.svg",
                colors=[f"C{i}" for i in range(len(depths))] * 2,
                styles=["-"] * len(depths) + ["--"] * len(depths))
 
-    capacity_plot("Dropout across capacities (mean +- std over 5 seeds)", "dropout_capacity.svg")
+    capacity_plot("Dropout across capacities (mean +- std over 5 seeds)", "dropout_capacity.svg",
+                  f"dropout {DROPOUT}",
+                  lambda h, w: variant_condition("dropout_capacity", DROPOUT, h, w, 1000))
+
+    batchnorm = lambda h, w: variant_condition("batchnorm", 0.0, h, w, 1000, batch_norm=True)
+
+    curve_plot([condition(3, 256), batchnorm(3, 256)],
+               ["no batch norm", "batch norm"],
+               "Batch norm on the best configuration (3x256, mean +- std over 5 seeds)",
+               "batchnorm.svg")
+
+    curve_plot([condition(h, 256) for h in depths] + [batchnorm(h, 256) for h in depths],
+               [f"{h}x256" for h in depths] + [f"{h}x256, batch norm" for h in depths],
+               "Batch norm by depth (256 neurons per layer, mean +- std over 5 seeds)",
+               "batchnorm_depth.svg",
+               colors=[f"C{i}" for i in range(len(depths))] * 2,
+               styles=["-"] * len(depths) + ["--"] * len(depths))
+
+    capacity_plot("Batch norm across capacities (mean +- std over 5 seeds)", "batchnorm_capacity.svg",
+                  "batch norm", batchnorm,
+                  lambda h, w: parameters(h, w, batch_norm=True))

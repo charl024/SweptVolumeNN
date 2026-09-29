@@ -13,12 +13,16 @@ from src.config import arg_parse, run_directory
 from src.data_setup import load_data, dataset_setup, iterate_batches
 
 class NeuralNetwork(nn.Module):
-	def __init__(self, in_dimension, out_dimension, hidden_layers, neurons_per_hidden_layer, dropout=0.0):
+	def __init__(self, in_dimension, out_dimension, hidden_layers, neurons_per_hidden_layer, dropout=0.0, batchnorm_toggle=False):
 		super(NeuralNetwork, self).__init__()
 		layers = []
 
 		# setup input layer
 		layers.append(nn.Linear(in_dimension, neurons_per_hidden_layer))
+
+		if batchnorm_toggle:
+			layers.append(nn.BatchNorm1d(neurons_per_hidden_layer))
+
 		layers.append(nn.ReLU())
 
 		# add dropout if value above 0
@@ -28,6 +32,11 @@ class NeuralNetwork(nn.Module):
 		# setup hidden layers
 		for _ in range(hidden_layers - 1):
 			layers.append(nn.Linear(neurons_per_hidden_layer, neurons_per_hidden_layer))
+
+			# add batch norm if enabled
+			if batchnorm_toggle:
+				layers.append(nn.BatchNorm1d(neurons_per_hidden_layer))
+
 			layers.append(nn.ReLU())
 
 			# add dropout if value above 0
@@ -93,7 +102,9 @@ def save_run(run_dir, config, stats, train_losses, eval_rmses, best_epoch, best_
 	checkpoint =   {"state_dict": {k: v.cpu() for k, v in best_state.items()} if best_state is not None else None,
 					"stats": {"x_mean": x_mean, "x_std": x_std, "y_mean": y_mean, "y_std": y_std},
 					"hidden_layers": config["hidden_layers"],
-					"neurons_per_hidden_layer": config["neurons_per_hidden_layer"]}
+					"neurons_per_hidden_layer": config["neurons_per_hidden_layer"],
+					"dropout": config["dropout"],
+					"batch_norm": config["batch_norm"]}
 	torch.save(checkpoint, run_dir / "checkpoint.pt")
 
 if __name__=="__main__":
@@ -123,7 +134,7 @@ if __name__=="__main__":
 	x_eval, y_eval = data["evaluation"]
 
 	# network setup
-	net = NeuralNetwork(in_dimension=14, out_dimension=1, hidden_layers=config["hidden_layers"], neurons_per_hidden_layer=config["neurons_per_hidden_layer"], dropout=config["dropout"])
+	net = NeuralNetwork(in_dimension=14, out_dimension=1, hidden_layers=config["hidden_layers"], neurons_per_hidden_layer=config["neurons_per_hidden_layer"], dropout=config["dropout"], batchnorm_toggle=config["batch_norm"])
 	optimizer = torch.optim.Adam(net.parameters(), lr=config["learning_rate"])
 	net.to(config["device"])
 

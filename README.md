@@ -20,6 +20,8 @@ To verify training works, run:
  - Standard
  - Dropout versus best hyperparam config comparison
  - Dropout across multiple hidden layer values
+ - Batch norm versus best hyperparam config comparison
+ - Batch norm across multiple hidden layer values
 
 ## Python Version Information
 Python 3.14.3, PyTorch 2.10.0, Matplotlib 3.10.8

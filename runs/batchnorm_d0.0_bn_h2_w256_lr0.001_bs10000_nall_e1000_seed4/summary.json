@@ -1,0 +1,6 @@
+{
+    "best_epoch": 955,
+    "best_eval_rmse": 3.033184731864307,
+    "training_time": 5.027517816051841,
+    "diverged_epoch": null
+}
